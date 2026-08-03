@@ -1,32 +1,55 @@
-// 1. Query the Scryfall API for card names matching the input
-var url = "https://api.scryfall.com/cards/search?q=name:" + encodeURIComponent(query);
-var response = http().get(url);
+// 1. Initialize the HTTP client with mandatory Scryfall headers
+var httpClient = http();
+httpClient.headers({
+    "User-Agent": "MementoMTGApp/1.0", // Required by Scryfall
+    "Accept": "application/json"        // Required by Scryfall
+});
 
-// 2. Process the response if successful
+// 2. Execute the search request
+var url = "https://api.scryfall.com/cards/search?q=" + encodeURIComponent(query);
+var response = httpClient.get(url);
+
+// 3. Process the response based on the HTTP status code
 if (response.code === 200) {
+    // SUCCESS: Parse the card data
     var data = JSON.parse(response.body);
-    var cards = data.data; // Scryfall returns cards in a 'data' array
+    var cards = data.data; 
     var resultArray = [];
 
-    // 3. Format the first 10 matches for the selection list
     for (var i = 0; i < Math.min(cards.length, 10); i++) {
         var card = cards[i];
         resultArray.push({
-            title: card.name,              // Required: Main text shown
-            desc: card.type_line + " | " + (card.mana_cost || ""), // Subtitle
-            id: card.id,                   // Unique ID
+            title: card.name,
+            desc: card.type_line + " | " + (card.mana_cost || ""),
+            id: card.id,
             
-            // Properties for field mapping:
+            // Properties for your library's field mapping:
             cardType: card.type_line,
             mana: card.mana_cost,
             setName: card.set_name,
-            // Use the 'small' image for the selection thumbnail
             thumb: card.image_uris ? card.image_uris.small : "",
-            // Use the 'normal' image for your library's image field
             largeImage: card.image_uris ? card.image_uris.normal : ""
         });
     }
-
-    // 4. Send results back to Memento
+    // Return the successful matches to the selection list
     result(resultArray);
+
+} else {
+    // FAILURE: Parse the Scryfall Error object (status 4XX or 5XX)
+    try {
+        var errorData = JSON.parse(response.body);
+        
+        // Check for the human-readable 'details' string provided by Scryfall
+        if (errorData.details) {
+            message("Scryfall Error: " + errorData.details); [3, 4]
+        } else {
+            message("Request failed with status code: " + response.code); [2, 4]
+        }
+    } catch (e) {
+        // Fallback for non-JSON error responses
+        message("An unexpected error occurred: " + response.code); [4]
+    }
+
+    // Return an empty array to clear the autofill list
+    result([]); [5]
 }
